@@ -1,0 +1,11 @@
+# Sensitive security files
+.env
+secret.key
+decrypted_*.txt
+passwords.json
+
+# Python environment and cache
+__pycache__/
+*.pyc
+venv/
+.venv/
