@@ -1,6 +1,8 @@
 import os
 import json
 import base64
+import secrets
+import string
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
@@ -25,9 +27,8 @@ def derive_key(master_password: str) -> bytes:
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt,
-        iterations=480000, # Industry standard iterations
+        iterations=480000,
     )
-    # Turn the raw password into a secure 32-byte string and URL-safe encode it
     key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
     return key
 
@@ -50,7 +51,6 @@ def add_password(account, password, master_password):
     """Encrypts and adds a password to the local JSON vault using the Master Password."""
     key = derive_key(master_password)
     fernet = Fernet(key)
-    
     encrypted_password = fernet.encrypt(password.encode()).decode()
     
     vault = load_vault()
@@ -75,3 +75,14 @@ def get_password(account, master_password):
     except Exception:
         print("[-] Access Denied: Incorrect Master Password or corrupted data.")
         return None
+
+def generate_strong_password(length=16):
+    """Generates a cryptographically secure random password."""
+    alphabet = string.ascii_letters + string.digits + string.punctuation
+    while True:
+        password = ''.join(secrets.choice(alphabet) for _ in range(length))
+        if (any(c.islower() for c in password)
+                and any(c.isupper() for c in password)
+                and any(c.isdigit() for c in password)
+                and any(c in string.punctuation for c in password)):
+            return password

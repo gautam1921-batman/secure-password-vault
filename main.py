@@ -1,11 +1,10 @@
 import getpass
-from vault import add_password, get_password
+from vault import add_password, get_password, generate_strong_password
 
 def main():
     print("=== SECURE LOCAL PASSWORD VAULT ===")
     print("[*] Please set or enter your Master Password to unlock the vault.")
     
-    # getpass hides the password typing input in standard terminals
     master_password = getpass.getpass("Master Password: ").strip()
     
     if not master_password:
@@ -21,11 +20,22 @@ def main():
         
         if choice == "1":
             account = input("Enter account name (e.g., Google, Netflix): ").strip()
-            password = input(f"Enter password for {account}: ").strip()
-            if account and password:
+            if not account:
+                print("[-] Account name cannot be empty.")
+                continue
+                
+            gen_choice = input("Do you want to auto-generate a strong password? (y/n): ").strip().lower()
+            
+            if gen_choice == 'y':
+                password = generate_strong_password()
+                print(f"[➔] Generated Secure Password: {password}")
+            else:
+                password = input(f"Enter custom password for {account}: ").strip()
+                
+            if password:
                 add_password(account, password, master_password)
             else:
-                print("[-] Account name and password cannot be empty.")
+                print("[-] Password cannot be empty.")
                 
         elif choice == "2":
             account = input("Enter the account name to retrieve: ").strip()
