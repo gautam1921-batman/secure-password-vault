@@ -1,24 +1,35 @@
 import os
 import json
+import base64
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
 
-KEY_FILE = "secret.key"
 DATA_FILE = "passwords.json"
+SALT_FILE = "salt.key"
 
-def generate_and_save_key():
-    """Generates a master encryption key and saves it locally."""
-    if not os.path.exists(KEY_FILE):
-        key = Fernet.generate_key()
-        with open(KEY_FILE, "wb") as f:
-            f.write(key)
-        print("[+] A new Master Key has been generated and saved locally.")
-
-def load_key():
-    """Loads the master key from the local file."""
-    if not os.path.exists(KEY_FILE):
-        raise FileNotFoundError("Master Key file missing! Please generate a key first.")
-    with open(KEY_FILE, "rb") as f:
+def get_or_create_salt():
+    """Generates a unique salt for key derivation or loads the existing one."""
+    if not os.path.exists(SALT_FILE):
+        salt = os.urandom(16)
+        with open(SALT_FILE, "wb") as f:
+            f.write(salt)
+        return salt
+    with open(SALT_FILE, "rb") as f:
         return f.read()
+
+def derive_key(master_password: str) -> bytes:
+    """Derives a cryptographically secure Fernet key from the Master Password."""
+    salt = get_or_create_salt()
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=480000, # Industry standard iterations
+    )
+    # Turn the raw password into a secure 32-byte string and URL-safe encode it
+    key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
+    return key
 
 def load_vault():
     """Loads the encrypted vault data or returns an empty dictionary."""
@@ -35,12 +46,11 @@ def save_vault(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-def add_password(account, password):
-    """Encrypts and adds a password to the local JSON vault."""
-    key = load_key()
+def add_password(account, password, master_password):
+    """Encrypts and adds a password to the local JSON vault using the Master Password."""
+    key = derive_key(master_password)
     fernet = Fernet(key)
     
-    # Encrypt the password string
     encrypted_password = fernet.encrypt(password.encode()).decode()
     
     vault = load_vault()
@@ -48,21 +58,20 @@ def add_password(account, password):
     save_vault(vault)
     print(f"[+] Successfully encrypted and saved credentials for: {account}")
 
-def get_password(account):
-    """Decrypts and retrieves a password for a given account."""
+def get_password(account, master_password):
+    """Decrypts and retrieves a password using the provided Master Password."""
     vault = load_vault()
     if account not in vault:
         print(f"[-] No credentials found for account: {account}")
         return None
         
-    key = load_key()
+    key = derive_key(master_password)
     fernet = Fernet(key)
     
     try:
-        # Decrypt the stored ciphertext
         encrypted_password = vault[account].encode()
         decrypted_password = fernet.decrypt(encrypted_password).decode()
         return decrypted_password
-    except Exception as e:
-        print("[-] Decryption failed. Your master key might be invalid or corrupted.")
+    except Exception:
+        print("[-] Access Denied: Incorrect Master Password or corrupted data.")
         return None
